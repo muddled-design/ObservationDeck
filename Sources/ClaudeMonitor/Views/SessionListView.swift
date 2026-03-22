@@ -1,14 +1,14 @@
 import SwiftUI
+import AppKit
 
 struct SessionListView: View {
     let store: SessionStore
+    var isTranslucent: Bool = false
 
     var body: some View {
         ZStack {
-            // Glass base — .ultraThinMaterial lets the desktop wallpaper/windows
-            // bleed through as subtle color context. Works in both light and dark mode.
             Rectangle()
-                .fill(.ultraThinMaterial)
+                .fill(isTranslucent ? AnyShapeStyle(.clear) : AnyShapeStyle(.ultraThinMaterial))
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
@@ -97,11 +97,11 @@ struct SessionListView: View {
         .background(
             // Hairline separator above the footer
             Rectangle()
-                .fill(Color(white: 0.5).opacity(0.12))
+                .fill(Color(white: 0.5).opacity(0.18))
                 .frame(height: 0.5),
             alignment: .top
         )
-        .background(.bar)
+        .background(Color(white: 0.5).opacity(0.12))
     }
 }
 
@@ -127,10 +127,15 @@ struct SessionDisclosureRow: View {
             }
         } label: {
             SessionRowView(session: session)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    activateTerminal(for: session.pid)
+                }
         }
         // Defeat the default opaque row background
         .listRowBackground(Color.clear)
         .padding(.horizontal, 8)
+        .contentShape(Rectangle())
         // Subtle card background — just enough to lift from the glass
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -140,5 +145,12 @@ struct SessionDisclosureRow: View {
                         .strokeBorder(Color(white: 0.5).opacity(0.10), lineWidth: 0.5)
                 )
         )
+    }
+
+    private func activateTerminal(for pid: Int32) {
+        guard let appPid = ProcessMonitor.terminalAppPID(for: pid) else { return }
+        if let app = NSRunningApplication(processIdentifier: appPid) {
+            app.activate()
+        }
     }
 }
