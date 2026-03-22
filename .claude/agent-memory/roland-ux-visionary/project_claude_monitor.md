@@ -15,14 +15,14 @@ Build: `swift build` from repo root. Entry point: `Sources/ClaudeMonitor/ClaudeM
 - `SessionStatus` enum — owns all color/icon/label semantics
 
 **Established design decisions (March 2026)**
-- Glass background: `NSVisualEffectView` material `.hudWindow`, blending `.behindWindow`, injected below SwiftUI content via `WindowAccessor`. Window is `isOpaque = false`, `backgroundColor = .clear`. Corner radius 10pt on both `NSVisualEffectView` and `contentView` layer.
-- Titlebar: `titlebarAppearsTransparent = true`, `titleVisibility = .hidden` — no visible title string, toolbar refresh button only.
+- Glass background: `NSVisualEffectView` material `.hudWindow`, blending `.behindWindow`, injected below SwiftUI content via `WindowAccessor`. Window is `isOpaque = false`, `backgroundColor = .clear`. Corner radius 10pt on both `NSVisualEffectView` and `contentView` layer. IMPORTANT: `.underWindowBackground` was tried and reviewed — it is the most opaque/least vibrant material and wrong for a floating HUD. `.hudWindow` is the correct choice for an always-on-top floating panel.
+- Titlebar: `titlebarAppearsTransparent = true`, `titleVisibility = .hidden` — no visible title string, toolbar refresh button only. Do NOT add `.navigationTitle` or a `.principal` ToolbarItem with "Observation Deck" text — it duplicates the window name and renders over the glass with no backing material.
 - List: `ScrollView` + `LazyVStack` (NOT SwiftUI `List`) — avoids opaque `NSScrollView` background fighting the glass. `listRowBackground(.clear)` was set but LazyVStack doesn't need it; pattern is to never use `List` with alternating backgrounds on glass windows.
 - Session cards: `RoundedRectangle` fill `Color(white: 0.5).opacity(0.07)` + `strokeBorder` opacity 0.10, cornerRadius 8. Padding `.horizontal(8)`.
 - Left accent strip: 2.5pt wide `RoundedRectangle`, per-status `accentColor` from `SessionStatus`. This is the primary glance signal.
 - `StatusBadge`: capsule pill with icon + label text, 9pt semibold, `glowColor` background (14% opacity), 0.5pt stroke border at 25% opacity. NOT just a dot.
 - Finished sessions: `opacity(0.6)` on the row, gray accent strip.
-- Status bar footer: `.bar` material, hairline separator, session count in a capsule pill.
+- Status bar footer: background `Color(white: 0.5).opacity(0.12)` minimum — do not go below 0.10 or it becomes invisible over bright backgrounds. Hairline separator at `opacity(0.18)`. Session count in a capsule pill.
 - Colors: hand-picked HSB values in `SessionStatus.color` — not system `.green`/`.orange`. Running: `hue 0.37`, NeedsInput: `hue 0.09`. Each status has `.color`, `.glowColor`, `.accentColor`.
 - Empty state: custom `VStack` (not `ContentUnavailableView`) for full style control.
 - `SessionDisclosureRow` is its own `View` with `@State private var isExpanded` — keeps expand state per-session and avoids the DisclosureGroup being reset on list rebuild.
