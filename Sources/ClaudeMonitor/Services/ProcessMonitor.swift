@@ -85,4 +85,34 @@ enum ProcessMonitor {
             ChildProcess(pid: childPid, name: processName(for: childPid))
         }
     }
+
+    /// Get the parent PID of a process using proc_pidinfo.
+    static func parentPID(of pid: Int32) -> Int32? {
+        var bsdInfo = proc_bsdinfo()
+        let size = Int32(MemoryLayout<proc_bsdinfo>.size)
+        let ret = proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &bsdInfo, size)
+        guard ret > 0 else { return nil }
+        let ppid = Int32(bsdInfo.pbi_ppid)
+        return ppid > 0 ? ppid : nil
+    }
+
+    /// Walk up the process tree from a given PID to find the owning GUI application PID.
+    /// Returns the PID of the terminal app (Terminal, iTerm, Warp, etc.) or nil.
+    static func terminalAppPID(for pid: Int32) -> Int32? {
+        var current = pid
+        var visited: Set<Int32> = []
+
+        while visited.insert(current).inserted {
+            guard let parent = parentPID(of: current) else { return nil }
+            if parent <= 1 { return nil } // reached launchd/init
+
+            // Check if parent is a GUI app by looking at its executable path
+            let path = executablePath(for: parent).lowercased()
+            if path.contains(".app/") {
+                return parent
+            }
+            current = parent
+        }
+        return nil
+    }
 }
