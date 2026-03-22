@@ -1,100 +1,97 @@
 import Foundation
 
-/// Watches ~/.claude/monitor-status/ for signal files written by Claude Code hooks.
-/// Each file is {sessionId}.json with {"session_id", "status", "event", "timestamp"}.
-/// This provides authoritative, instant status from Claude Code itself.
+/// Reads ~/.claude/monitor-status/ for signal files written by Claude Code hooks.
+/// Each file is {sessionId}.json containing status, event, cwd, and timestamp.
 final class HookSignalWatcher {
     struct Signal {
         let sessionId: String
         let status: String
         let event: String
+        let cwd: String
         let timestamp: Date
     }
 
     private let statusDir: String
-    private var source: DispatchSourceFileSystemObject?
-    private let queue = DispatchQueue(label: "com.claudemonitor.hooksignal", qos: .utility)
-    private let onChange: (Signal) -> Void
 
-    init(onChange: @escaping (Signal) -> Void) {
+    init() {
         self.statusDir = (FileManager.default.homeDirectoryForCurrentUser.path as NSString)
             .appendingPathComponent(".claude/monitor-status")
-        self.onChange = onChange
-        ensureDirectory()
-        startWatching()
-    }
-
-    private func ensureDirectory() {
         try? FileManager.default.createDirectory(
             atPath: statusDir,
             withIntermediateDirectories: true
         )
     }
 
-    private func startWatching() {
-        let fd = open(statusDir, O_EVTONLY)
-        guard fd >= 0 else { return }
-
-        let source = DispatchSource.makeFileSystemObjectSource(
-            fileDescriptor: fd,
-            eventMask: [.write],
-            queue: queue
-        )
-
-        source.setEventHandler { [weak self] in
-            self?.scanSignals()
-        }
-
-        source.setCancelHandler {
-            close(fd)
-        }
-
-        source.resume()
-        self.source = source
-
-        // Initial scan
-        queue.async { [weak self] in
-            self?.scanSignals()
-        }
+    /// Read the latest signal for a specific session ID.
+    func latestSignal(for sessionId: String) -> Signal? {
+        let path = (statusDir as NSString).appendingPathComponent("\(sessionId).json")
+        return readSignal(at: path)
     }
 
-    private func scanSignals() {
+    /// Find the most recent signal matching a given cwd.
+    /// Used when the session file's ID doesn't match the hook's session ID
+    /// (e.g. after /exit and resume, or session ID rotation).
+    func latestSignal(forCwd cwd: String) -> Signal? {
         let fm = FileManager.default
-        guard let files = try? fm.contentsOfDirectory(atPath: statusDir) else { return }
+        guard let files = try? fm.contentsOfDirectory(atPath: statusDir) else { return nil }
 
+        var best: Signal?
         for file in files where file.hasSuffix(".json") {
             let path = (statusDir as NSString).appendingPathComponent(file)
-            guard let data = fm.contents(atPath: path),
-                  let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let sessionId = obj["session_id"] as? String,
-                  let status = obj["status"] as? String,
-                  let event = obj["event"] as? String,
-                  let ts = obj["timestamp"] as? TimeInterval else { continue }
+            guard let signal = readSignal(at: path),
+                  signal.cwd == cwd else { continue }
+            if best == nil || signal.timestamp > best!.timestamp {
+                best = signal
+            }
+        }
+        return best
+    }
 
-            let signal = Signal(
-                sessionId: sessionId,
-                status: status,
-                event: event,
-                timestamp: Date(timeIntervalSince1970: ts)
-            )
-            onChange(signal)
+    /// Scan all signals — returns every signal file.
+    func allSignals() -> [Signal] {
+        let fm = FileManager.default
+        guard let files = try? fm.contentsOfDirectory(atPath: statusDir) else { return [] }
+        return files.compactMap { file -> Signal? in
+            guard file.hasSuffix(".json") else { return nil }
+            let path = (statusDir as NSString).appendingPathComponent(file)
+            return readSignal(at: path)
         }
     }
 
-    /// Remove signal files for sessions that no longer exist
-    func pruneExcept(activeIds: Set<String>) {
+    private func readSignal(at path: String) -> Signal? {
+        let fm = FileManager.default
+        guard let data = fm.contents(atPath: path),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let sessionId = obj["session_id"] as? String,
+              let status = obj["status"] as? String,
+              let event = obj["event"] as? String,
+              let ts = obj["timestamp"] as? TimeInterval else { return nil }
+        let cwd = obj["cwd"] as? String ?? ""
+        return Signal(
+            sessionId: sessionId,
+            status: status,
+            event: event,
+            cwd: cwd,
+            timestamp: Date(timeIntervalSince1970: ts)
+        )
+    }
+
+    /// Remove signal files older than a threshold with no matching active session
+    func pruneStale(activeCwds: Set<String>, maxAge: TimeInterval = 3600) {
         let fm = FileManager.default
         guard let files = try? fm.contentsOfDirectory(atPath: statusDir) else { return }
+        let now = Date()
         for file in files where file.hasSuffix(".json") {
-            let sessionId = String(file.dropLast(5)) // remove .json
-            if !activeIds.contains(sessionId) {
-                let path = (statusDir as NSString).appendingPathComponent(file)
+            let path = (statusDir as NSString).appendingPathComponent(file)
+            guard let signal = readSignal(at: path) else {
+                try? fm.removeItem(atPath: path)
+                continue
+            }
+            // Only prune if old AND not matching any active cwd
+            if now.timeIntervalSince(signal.timestamp) > maxAge,
+               !activeCwds.contains(signal.cwd) {
                 try? fm.removeItem(atPath: path)
             }
         }
-    }
-
-    deinit {
-        source?.cancel()
     }
 }
