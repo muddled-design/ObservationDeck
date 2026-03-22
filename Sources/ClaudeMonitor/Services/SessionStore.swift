@@ -8,10 +8,14 @@ final class SessionStore {
     private var timer: Timer?
     private var sessionMap: [String: ClaudeSession] = [:]
     private var fileWatcher: FileWatcher?
+    private var hookWatcher: HookSignalWatcher?
 
-    /// How long after the last write event before transitioning to "Needs Input".
-    /// FileWatcher provides real-time events, so this only needs to cover
-    /// brief gaps between tool calls/streaming chunks — not full API thinking time.
+    /// How long a hook signal stays authoritative before falling back to heuristics.
+    /// Hook signals are precise, so we trust them for a generous window.
+    private static let hookSignalTTL: TimeInterval = 30
+
+    /// Fallback: how long after the last file write before transitioning to "Needs Input"
+    /// (only used when no recent hook signal exists).
     private static let idleThreshold: TimeInterval = 3
 
     func startPolling(interval: TimeInterval = 1.0) {
@@ -20,6 +24,12 @@ final class SessionStore {
         fileWatcher = FileWatcher { [weak self] sessionId in
             DispatchQueue.main.async {
                 self?.onFileWrite(sessionId: sessionId)
+            }
+        }
+
+        hookWatcher = HookSignalWatcher { [weak self] signal in
+            DispatchQueue.main.async {
+                self?.onHookSignal(signal)
             }
         }
 
@@ -33,6 +43,7 @@ final class SessionStore {
         timer?.invalidate()
         timer = nil
         fileWatcher = nil
+        hookWatcher = nil
     }
 
     /// Called instantly when a JSONL file is written to
@@ -41,6 +52,22 @@ final class SessionStore {
         session.lastWriteEvent = Date()
         if session.status != .running {
             session.status = .running
+        }
+    }
+
+    /// Called instantly when Claude Code fires a hook event
+    private func onHookSignal(_ signal: HookSignalWatcher.Signal) {
+        guard let session = sessionMap[signal.sessionId] else { return }
+        session.hookSignalStatus = signal.status
+        session.hookSignalTimestamp = signal.timestamp
+
+        switch signal.status {
+        case "running":
+            session.status = .running
+        case "stopped", "needs_input":
+            session.status = .needsInput
+        default:
+            break
         }
     }
 
@@ -75,31 +102,51 @@ final class SessionStore {
             if !alive {
                 session.status = .finished
                 session.lastCPUTime = nil
+                session.hookSignalStatus = nil
             } else {
                 activeSessionIds.insert(file.sessionId)
 
-                // Use the most recent signal: either FileWatcher event or file mod date
-                let lastActivity: Date? = [session.lastWriteEvent, modDate]
-                    .compactMap { $0 }
-                    .max()
-
-                let staleness: TimeInterval
-                if let last = lastActivity {
-                    staleness = Date().timeIntervalSince(last)
+                // Priority 1: Recent hook signal from Claude Code itself (most authoritative)
+                let hookAge: TimeInterval
+                if let hookTS = session.hookSignalTimestamp {
+                    hookAge = Date().timeIntervalSince(hookTS)
                 } else {
-                    staleness = .infinity
+                    hookAge = .infinity
                 }
 
-                // CPU time check: detect active processing even without JSONL writes
-                // (e.g. during API calls / "thinking" periods)
-                let currentCPU = ProcessMonitor.totalCPUTime(pid: file.pid)
-                let cpuActive = session.lastCPUTime.map { currentCPU > $0 } ?? false
-                session.lastCPUTime = currentCPU
-
-                if staleness < Self.idleThreshold || cpuActive {
-                    session.status = .running
+                if hookAge < Self.hookSignalTTL, let hookStatus = session.hookSignalStatus {
+                    // Trust the hook signal
+                    switch hookStatus {
+                    case "running":
+                        session.status = .running
+                    case "stopped", "needs_input":
+                        session.status = .needsInput
+                    default:
+                        break
+                    }
                 } else {
-                    session.status = .needsInput
+                    // Priority 2: File activity + CPU heuristics (fallback)
+                    let lastActivity: Date? = [session.lastWriteEvent, modDate]
+                        .compactMap { $0 }
+                        .max()
+
+                    let staleness: TimeInterval
+                    if let last = lastActivity {
+                        staleness = Date().timeIntervalSince(last)
+                    } else {
+                        staleness = .infinity
+                    }
+
+                    // CPU time check: detect active processing even without JSONL writes
+                    let currentCPU = ProcessMonitor.totalCPUTime(pid: file.pid)
+                    let cpuActive = session.lastCPUTime.map { currentCPU > $0 } ?? false
+                    session.lastCPUTime = currentCPU
+
+                    if staleness < Self.idleThreshold || cpuActive {
+                        session.status = .running
+                    } else {
+                        session.status = .needsInput
+                    }
                 }
 
                 // Watch all JSONL files (main + subagents) for this session
@@ -116,6 +163,7 @@ final class SessionStore {
         }
 
         fileWatcher?.pruneExcept(activeIds: activeSessionIds)
+        hookWatcher?.pruneExcept(activeIds: activeSessionIds)
 
         sessionMap = updated
         // Stable order: sort by start time only (newest first). Never reorder based on status.

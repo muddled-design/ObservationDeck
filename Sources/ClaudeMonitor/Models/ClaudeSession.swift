@@ -22,6 +22,9 @@ final class ClaudeSession: Identifiable {
     var title: String?
     /// CPU time (user+system nanoseconds) from last poll — used to detect active processing
     var lastCPUTime: UInt64?
+    /// Last status signal from Claude Code hooks (authoritative source)
+    var hookSignalStatus: String?
+    var hookSignalTimestamp: Date?
 
     var projectName: String {
         URL(fileURLWithPath: cwd).lastPathComponent
