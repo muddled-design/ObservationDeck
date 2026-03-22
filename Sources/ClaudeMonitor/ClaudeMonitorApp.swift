@@ -5,12 +5,26 @@ import AppKit
 struct ClaudeMonitorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @State private var store = SessionStore()
+    @State private var isTranslucent = false
 
     var body: some Scene {
         WindowGroup {
-            SessionListView(store: store)
+            SessionListView(store: store, isTranslucent: isTranslucent)
                 .onAppear { store.startPolling() }
                 .toolbar {
+                    ToolbarItem(placement: .principal) {
+                        Text("Observation Deck")
+                            .font(.system(size: 13, weight: .semibold))
+                            .padding(.vertical, 4)
+                            .padding(.horizontal, 8)
+                    }
+                    ToolbarItem(placement: .automatic) {
+                        Button(action: { isTranslucent.toggle() }) {
+                            Image(systemName: isTranslucent ? "eye.fill" : "eye.slash")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        .help(isTranslucent ? "Opaque mode" : "Translucent mode")
+                    }
                     ToolbarItem(placement: .automatic) {
                         Button(action: { store.refresh() }) {
                             Image(systemName: "arrow.clockwise")
@@ -22,6 +36,7 @@ struct ClaudeMonitorApp: App {
                 .background(WindowAccessor())
         }
         .windowResizability(.contentSize)
+        .windowToolbarStyle(.unified)
         .defaultSize(width: 420, height: 600)
     }
 }
@@ -58,7 +73,7 @@ struct WindowAccessor: NSViewRepresentable {
             // Standard unified look — blurs content behind the entire window
             if let contentView = window.contentView {
                 let effectView = NSVisualEffectView()
-                effectView.material = .hudWindow        // deep, rich blur
+                effectView.material = .hudWindow
                 effectView.blendingMode = .behindWindow
                 effectView.state = .active
                 effectView.wantsLayer = true
