@@ -45,6 +45,30 @@ enum SessionScanner {
         return FileManager.default.fileExists(atPath: path) ? path : nil
     }
 
+    /// Find the most recently modified JSONL in the project directory for a given cwd.
+    /// This handles cases where the session file's sessionId doesn't match the actual JSONL.
+    static func activeJsonlSessionId(cwd: String) -> String? {
+        let encoded = PathEncoder.encode(cwd)
+        let dir = (projectsDir as NSString).appendingPathComponent(encoded)
+        let fm = FileManager.default
+        guard let files = try? fm.contentsOfDirectory(atPath: dir) else { return nil }
+
+        var bestId: String?
+        var bestDate: Date?
+
+        for file in files where file.hasSuffix(".jsonl") {
+            let path = (dir as NSString).appendingPathComponent(file)
+            if let attrs = try? fm.attributesOfItem(atPath: path),
+               let mod = attrs[.modificationDate] as? Date {
+                if bestDate == nil || mod > bestDate! {
+                    bestDate = mod
+                    bestId = String(file.dropLast(6)) // remove .jsonl
+                }
+            }
+        }
+        return bestId
+    }
+
     static func jsonlModificationDate(cwd: String, sessionId: String) -> Date? {
         guard let path = jsonlPath(cwd: cwd, sessionId: sessionId) else { return nil }
         let attrs = try? FileManager.default.attributesOfItem(atPath: path)
