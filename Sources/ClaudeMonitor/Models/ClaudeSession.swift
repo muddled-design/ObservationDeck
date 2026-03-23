@@ -25,6 +25,8 @@ final class ClaudeSession: Identifiable {
     /// Last status signal from Claude Code hooks (authoritative source)
     var hookSignalStatus: String?
     var hookSignalTimestamp: Date?
+    /// What Claude is currently doing — extracted from the JSONL transcript
+    var currentActivity: String?
 
     var projectName: String {
         URL(fileURLWithPath: cwd).lastPathComponent
