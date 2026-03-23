@@ -24,6 +24,16 @@ struct SessionRowView: View {
                         .lineLimit(1)
                         .truncationMode(.head)
                         .help(session.cwd)
+
+                    // Current activity — what Claude is doing right now
+                    if session.status != .finished,
+                       let activity = session.currentActivity {
+                        Text(activity)
+                            .font(.system(size: 10))
+                            .foregroundStyle(.quaternary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
                 }
 
                 Spacer(minLength: 8)
