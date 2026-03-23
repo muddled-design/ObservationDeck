@@ -5,10 +5,14 @@ A native macOS app that monitors all running Claude Code sessions in real-time. 
 ## Features
 
 - **Real-time status tracking** — Running, Idle, Needs Input, and Finished states powered by Claude Code's hook system for instant, accurate updates
+- **Live activity display** — See what each Claude session is doing right now (e.g. "Reading SessionStore.swift", "Searching for pattern", Bash command descriptions)
+- **Click to switch terminal** — Hover a session row and click the arrow icon to jump to that session's exact terminal tab (AppleScript TTY matching for Terminal.app, generic activation for iTerm/Warp)
 - **Floating glass window** — Stays on top of all windows across all desktops with Apple's vibrancy design
+- **Translucent mode** — Toggle between opaque and see-through window modes
 - **Session names** — Displays `/rename` names alongside project directory
 - **Process tree monitoring** — Expand any session to see spawned child processes
 - **Subagent awareness** — Tracks activity across subagent JSONL files so status stays accurate during agent work
+- **Right-click context menu** — Right-click any session to switch to its terminal
 
 ## Status States
 
@@ -133,6 +137,15 @@ chmod +x ~/.claude/monitor-hook.sh
 
 The app will appear as a floating window on top of all other windows. It works across all desktops/spaces.
 
+**Toolbar controls:**
+- **Eye icon** — Toggle translucent/opaque mode
+- **Refresh icon** — Force an immediate refresh
+
+**Session interactions:**
+- **Click** a row to expand/collapse child processes
+- **Hover** to reveal the terminal switch icon (arrow), click to jump to that tab
+- **Right-click** for a context menu with "Switch to Terminal"
+
 ## How It Works
 
 Observation Deck uses a three-layer approach for status detection:
@@ -159,12 +172,13 @@ Sources/
 │   ├── Services/
 │   │   ├── SessionScanner.swift    # Reads ~/.claude/sessions/*.json
 │   │   ├── SessionStore.swift      # Status state machine (see STATUS_TRANSITIONS.md)
-│   │   ├── ProcessMonitor.swift    # PID validation, process tree, CPU time
+│   │   ├── ProcessMonitor.swift    # PID validation, process tree, CPU time, TTY lookup
 │   │   ├── FileWatcher.swift       # DispatchSource JSONL watchers
-│   │   └── HookSignalWatcher.swift # Reads hook signal files
+│   │   ├── HookSignalWatcher.swift # Reads hook signal files
+│   │   └── TranscriptReader.swift  # Extracts current activity from JSONL transcripts
 │   ├── Views/
-│   │   ├── SessionListView.swift
-│   │   ├── SessionRowView.swift
+│   │   ├── SessionListView.swift   # Session list + terminal activation
+│   │   ├── SessionRowView.swift    # Row with status, activity, duration
 │   │   ├── StatusBadge.swift
 │   │   └── ChildProcessRow.swift
 │   └── Utilities/
