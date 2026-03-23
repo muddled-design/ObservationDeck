@@ -5,12 +5,16 @@ import AppKit
 struct ClaudeMonitorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @State private var store = SessionStore()
+    @State private var hookInstaller = HookInstaller()
     @State private var isTranslucent = false
 
     var body: some Scene {
         WindowGroup {
-            SessionListView(store: store, isTranslucent: isTranslucent)
-                .onAppear { store.startPolling() }
+            SessionListView(store: store, hookInstaller: hookInstaller, isTranslucent: isTranslucent)
+                .onAppear {
+                    store.startPolling()
+                    hookInstaller.check()
+                }
                 .toolbar {
                     ToolbarItem(placement: .principal) {
                         Text("Observation Deck")
