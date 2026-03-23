@@ -86,13 +86,28 @@ enum ProcessMonitor {
         }
     }
 
-    /// Get the parent PID of a process using proc_pidinfo.
+    /// Get the TTY device name for a process (e.g. "ttys001").
+    static func ttyName(for pid: Int32) -> String? {
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.stride
+        let ret = sysctl(&mib, 4, &info, &size, nil, 0)
+        guard ret == 0, size > 0 else { return nil }
+        let dev = info.kp_eproc.e_tdev
+        guard dev != 0, dev != -1 else { return nil }
+        guard let cName = devname(dev, S_IFCHR) else { return nil }
+        return String(cString: cName)
+    }
+
+    /// Get the parent PID of a process using sysctl (works for privileged processes
+    /// like `login` where proc_pidinfo fails from a GUI app).
     static func parentPID(of pid: Int32) -> Int32? {
-        var bsdInfo = proc_bsdinfo()
-        let size = Int32(MemoryLayout<proc_bsdinfo>.size)
-        let ret = proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &bsdInfo, size)
-        guard ret > 0 else { return nil }
-        let ppid = Int32(bsdInfo.pbi_ppid)
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.stride
+        let ret = sysctl(&mib, 4, &info, &size, nil, 0)
+        guard ret == 0, size > 0 else { return nil }
+        let ppid = info.kp_eproc.e_ppid
         return ppid > 0 ? ppid : nil
     }
 
@@ -104,9 +119,8 @@ enum ProcessMonitor {
 
         while visited.insert(current).inserted {
             guard let parent = parentPID(of: current) else { return nil }
-            if parent <= 1 { return nil } // reached launchd/init
+            if parent <= 1 { return nil }
 
-            // Check if parent is a GUI app by looking at its executable path
             let path = executablePath(for: parent).lowercased()
             if path.contains(".app/") {
                 return parent

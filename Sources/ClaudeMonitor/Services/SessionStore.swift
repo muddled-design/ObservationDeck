@@ -114,6 +114,11 @@ final class SessionStore {
             let children = alive ? ProcessMonitor.childProcesses(of: file.pid) : []
             session.childProcesses = children
 
+            // Read current activity from transcript
+            if let jsonlPath = SessionScanner.jsonlPath(cwd: file.cwd, sessionId: jsonlSessionId) {
+                session.currentActivity = TranscriptReader.lastActivity(at: jsonlPath)
+            }
+
             if !alive {
                 // TC10: Process dead → Finished
                 session.status = .finished
