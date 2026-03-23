@@ -3,6 +3,7 @@ import AppKit
 
 struct SessionListView: View {
     let store: SessionStore
+    let hookInstaller: HookInstaller
     var isTranslucent: Bool = false
 
     var body: some View {
@@ -12,6 +13,8 @@ struct SessionListView: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
+                HookSetupBanner(installer: hookInstaller)
+
                 if store.sessions.isEmpty {
                     emptyState
                 } else {
