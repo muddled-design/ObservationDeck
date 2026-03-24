@@ -12,6 +12,12 @@ brew install --cask muddled-design/observation-deck/observation-deck
 
 Or download the DMG from [Releases](https://github.com/muddled-design/ObservationDeck/releases).
 
+### Upgrade
+
+```bash
+brew upgrade --cask observation-deck
+```
+
 ## Features
 
 - **Real-time status tracking** — Running, Idle, Needs Input, and Finished states powered by Claude Code's hook system for instant, accurate updates
