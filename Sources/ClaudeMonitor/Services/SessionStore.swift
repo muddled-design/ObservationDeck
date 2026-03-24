@@ -136,6 +136,12 @@ final class SessionStore {
                         session: session,
                         lastActivity: lastActivity
                     )
+                } else if HookInstaller.hooksAreConfigured {
+                    // Hooks are installed but no signal yet (new session) — default
+                    // to idle until the first hook fires, rather than guessing running
+                    if session.status != .running || session.hookSignalStatus == nil {
+                        session.status = .idle
+                    }
                 } else {
                     session.status = heuristicStatus(
                         session: session,
