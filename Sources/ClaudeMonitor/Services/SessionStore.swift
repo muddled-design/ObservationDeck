@@ -198,8 +198,9 @@ final class SessionStore {
 
         case "needs_input":
             // TC6: Permission prompt → Needs Input
-            // TC7: New work after grace period → Running
-            return newWorkAfterHook ? .running : .needsInput
+            // needs_input is sticky — only a running/idle hook should clear it,
+            // not file activity (JSONL writes can happen while waiting for input)
+            return .needsInput
 
         default:
             // TC2, TC3, TC4, TC8, TC9: hook says "running" → STICKY Running.
