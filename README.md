@@ -1,6 +1,6 @@
 # Observation Deck
 
-A native macOS app that monitors all running Claude Code sessions in real-time. See at a glance which sessions are working, which need your attention, and which are sitting idle — all from a persistent floating window.
+A native macOS app that monitors all running Claude Code sessions in real-time. See at a glance which sessions are working, which need your attention, and which are sitting idle — all from a non-intrusive floating window that stays on top without stealing focus or interrupting your workflow.
 
 ![Observation Deck](assets/screenshot.png)
 
@@ -32,6 +32,30 @@ Or download the DMG from [Releases](https://github.com/muddled-design/Observatio
 | **Needs Input** | Orange | Claude is waiting for permission approval |
 | **Idle** | Blue | Claude finished responding, session sitting idle |
 | **Finished** | Gray | The Claude Code process has exited |
+
+## Status State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle: Session starts
+
+    Idle --> Running: PreToolUse hook / file write after grace period
+
+    Running --> Idle: Stop hook
+    Running --> NeedsInput: Notification hook (permission_prompt)
+    Running --> Finished: Process exits
+
+    NeedsInput --> Running: PreToolUse hook (permission granted)
+    NeedsInput --> Finished: Process exits
+
+    Idle --> Finished: Process exits
+```
+
+- **Running is sticky** — once a hook says "running", it stays Running until a Stop or Notification hook explicitly ends it. No timeouts.
+- **Needs Input is sticky** — only cleared by a new hook event, not by file activity.
+- **Finished** — any state transitions here when the process exits, regardless of last hook signal.
+
+See [STATUS_TRANSITIONS.md](STATUS_TRANSITIONS.md) for detailed test cases.
 
 ## Requirements
 
