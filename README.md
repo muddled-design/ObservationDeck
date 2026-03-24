@@ -1,6 +1,6 @@
 # Observation Deck
 
-A native macOS app that monitors all running Claude Code sessions in real-time. See at a glance which sessions are working, which need your attention, and which are sitting idle — all from a persistent floating window.
+A native macOS app that monitors all running Claude Code sessions in real-time. See at a glance which sessions are working, which need your attention, and which are sitting idle — all from a non-intrusive floating window that stays on top without stealing focus or interrupting your workflow.
 
 ![Observation Deck](assets/screenshot.png)
 
