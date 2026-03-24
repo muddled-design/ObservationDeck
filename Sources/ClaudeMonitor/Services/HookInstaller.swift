@@ -30,6 +30,32 @@ final class HookInstaller {
         self.hookScriptDest = (home as NSString).appendingPathComponent(".claude/monitor-hook.sh")
     }
 
+    /// Quick static check for whether hooks are configured (cached after first call).
+    static var hooksAreConfigured: Bool {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let settingsPath = (home as NSString).appendingPathComponent(".claude/settings.json")
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: settingsPath),
+              let data = fm.contents(atPath: settingsPath),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let hooks = json["hooks"] as? [String: Any] else {
+            return false
+        }
+        // Check if at least one event has the monitor hook
+        for (_, value) in hooks {
+            guard let rules = value as? [[String: Any]] else { continue }
+            for rule in rules {
+                guard let hookArray = rule["hooks"] as? [[String: Any]] else { continue }
+                for hook in hookArray {
+                    if let cmd = hook["command"] as? String, cmd.contains("monitor-hook") {
+                        return true
+                    }
+                }
+            }
+        }
+        return false
+    }
+
     /// Check if hooks are already configured.
     func check() {
         state = .checking
