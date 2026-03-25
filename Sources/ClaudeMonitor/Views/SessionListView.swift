@@ -200,19 +200,25 @@ struct SessionDisclosureRow: View {
         for w in NSApp.windows { w.level = .normal }
 
         if isTerminalApp, let tty = tty {
-            // Use AppleScript to switch to the exact tab in Terminal.app
+            // Use AppleScript to switch to the exact tab/window in Terminal.app.
+            // We first find the matching window, select its tab, bring it to front,
+            // THEN activate Terminal — this order is more reliable for window focus.
             let script = """
             tell application "Terminal"
-                activate
                 repeat with w in windows
                     repeat with i from 1 to count of tabs of w
                         if tty of tab i of w contains "\(tty)" then
                             set selected tab of w to tab i of w
+                            -- Bring this window to front by setting index
                             set index of w to 1
+                            -- Activate after window is selected for reliable focus
+                            activate
                             return "ok"
                         end if
                     end repeat
                 end repeat
+                -- Fallback: just activate Terminal if no TTY match
+                activate
             end tell
             """
             var error: NSDictionary?
@@ -224,12 +230,13 @@ struct SessionDisclosureRow: View {
             if let app = NSWorkspace.shared.runningApplications.first(where: {
                 $0.processIdentifier == appPid
             }) {
-                app.activate(options: .activateIgnoringOtherApps)
+                app.activate()
             }
         }
 
-        // Restore floating after a delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+        // Restore floating after a delay — give Terminal enough time to finish
+        // window ordering before we go back on top
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
             for w in NSApp.windows { w.level = .floating }
         }
     }
