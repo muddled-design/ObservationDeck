@@ -7,6 +7,7 @@ final class HookSignalWatcher {
         let sessionId: String
         let status: String
         let event: String
+        let notificationType: String
         let cwd: String
         let timestamp: Date
     }
@@ -67,10 +68,12 @@ final class HookSignalWatcher {
               let event = obj["event"] as? String,
               let ts = obj["timestamp"] as? TimeInterval else { return nil }
         let cwd = obj["cwd"] as? String ?? ""
+        let notificationType = obj["notification_type"] as? String ?? ""
         return Signal(
             sessionId: sessionId,
             status: status,
             event: event,
+            notificationType: notificationType,
             cwd: cwd,
             timestamp: Date(timeIntervalSince1970: ts)
         )

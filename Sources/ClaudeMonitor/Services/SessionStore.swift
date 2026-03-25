@@ -63,14 +63,20 @@ final class SessionStore {
             return
         }
 
-        // Hook says idle/needs_input. Is this write finalization or new work?
+        // Hook says idle/needs_input/question_asked.
+        // needs_input and question_asked are sticky — don't override on file write.
+        if hookStatus == "needs_input" || hookStatus == "question_asked" {
+            return
+        }
+
+        // Hook says idle. Is this write finalization or new work?
         // If the hook fired recently (within grace period), this is finalization → ignore.
         // If the hook is old, this is a new user message → transition to running.
         if let hookTS = session.hookSignalTimestamp,
            Date().timeIntervalSince(hookTS) > Self.hookGracePeriod {
             if session.status != .running { session.status = .running }
         }
-        // Otherwise: recent idle/needs_input hook + write = finalization → don't change status
+        // Otherwise: recent idle hook + write = finalization → don't change status
     }
 
     // MARK: - Refresh (1s poll)
@@ -203,10 +209,15 @@ final class SessionStore {
             return newWorkAfterHook ? .running : .idle
 
         case "needs_input":
-            // TC6: Permission prompt → Needs Input
+            // TC6: Permission prompt → Needs Approval
             // needs_input is sticky — only a running/idle hook should clear it,
             // not file activity (JSONL writes can happen while waiting for input)
             return .needsInput
+
+        case "question_asked":
+            // Elicitation dialog → Question Asked
+            // Sticky like needs_input — only cleared by a new hook event
+            return .questionAsked
 
         default:
             // TC2, TC3, TC4, TC8, TC9: hook says "running" → STICKY Running.

@@ -233,8 +233,11 @@ final class HookInstaller {
         ;;
       Notification)
         case "$NOTIF_TYPE" in
-          permission_prompt|elicitation_dialog)
+          permission_prompt)
             STATUS="needs_input"
+            ;;
+          elicitation_dialog)
+            STATUS="question_asked"
             ;;
           *)
             STATUS="idle"
