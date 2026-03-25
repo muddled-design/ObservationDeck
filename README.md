@@ -35,7 +35,8 @@ brew upgrade --cask observation-deck
 | Status | Color | Meaning |
 |--------|-------|---------|
 | **Running** | Green | Claude is actively working (tool use, streaming, API calls) |
-| **Needs Input** | Orange | Claude is waiting for permission approval |
+| **Needs Approval** | Orange | Claude is waiting for permission to use a tool |
+| **Question Asked** | Purple | Claude asked a question via elicitation dialog |
 | **Idle** | Blue | Claude finished responding, session sitting idle |
 | **Finished** | Gray | The Claude Code process has exited |
 
@@ -48,17 +49,21 @@ stateDiagram-v2
     Idle --> Running: PreToolUse hook / file write after grace period
 
     Running --> Idle: Stop hook
-    Running --> NeedsInput: Notification hook (permission_prompt)
+    Running --> NeedsApproval: permission_prompt
+    Running --> QuestionAsked: elicitation_dialog
     Running --> Finished: Process exits
 
-    NeedsInput --> Running: PreToolUse hook (permission granted)
-    NeedsInput --> Finished: Process exits
+    NeedsApproval --> Running: PreToolUse hook (permission granted)
+    NeedsApproval --> Finished: Process exits
+
+    QuestionAsked --> Running: PreToolUse hook (user responded)
+    QuestionAsked --> Finished: Process exits
 
     Idle --> Finished: Process exits
 ```
 
 - **Running is sticky** — once a hook says "running", it stays Running until a Stop or Notification hook explicitly ends it. No timeouts.
-- **Needs Input is sticky** — only cleared by a new hook event, not by file activity.
+- **Needs Approval / Question Asked are sticky** — only cleared by a new hook event, not by file activity.
 - **Finished** — any state transitions here when the process exits, regardless of last hook signal.
 
 See [STATUS_TRANSITIONS.md](STATUS_TRANSITIONS.md) for detailed test cases.
