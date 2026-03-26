@@ -196,9 +196,6 @@ struct SessionDisclosureRow: View {
         let isTerminalApp = exePath.contains("Terminal.app")
         let tty = ProcessMonitor.ttyName(for: pid)
 
-        // Drop floating level so the terminal appears in front
-        for w in NSApp.windows { w.level = .normal }
-
         if isTerminalApp, let tty = tty {
             // Use AppleScript to switch to the exact tab/window in Terminal.app.
             // We first find the matching window, select its tab, bring it to front,
@@ -234,10 +231,5 @@ struct SessionDisclosureRow: View {
             }
         }
 
-        // Restore floating after a delay — give Terminal enough time to finish
-        // window ordering before we go back on top
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            for w in NSApp.windows { w.level = .floating }
-        }
     }
 }

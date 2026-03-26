@@ -87,7 +87,7 @@ cat > "$CONTENTS/Info.plist" << PLIST
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>LSUIElement</key>
-    <false/>
+    <true/>
     <key>NSSupportsAutomaticTermination</key>
     <true/>
     <key>NSSupportsSuddenTermination</key>

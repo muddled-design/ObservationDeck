@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 enum SessionStatus: String, Comparable {
     case running
@@ -72,5 +73,26 @@ enum SessionStatus: String, Comparable {
 
     static func < (lhs: SessionStatus, rhs: SessionStatus) -> Bool {
         lhs.sortOrder < rhs.sortOrder
+    }
+
+    /// Priority for menu bar icon — lower = more urgent.
+    var menuBarPriority: Int {
+        switch self {
+        case .needsInput:     return 0
+        case .questionAsked:  return 1
+        case .running:        return 2
+        case .idle:           return 3
+        case .finished:       return 4
+        }
+    }
+
+    var nsColor: NSColor {
+        switch self {
+        case .running:        return NSColor(hue: 0.37, saturation: 0.75, brightness: 0.85, alpha: 1)
+        case .needsInput:     return NSColor(hue: 0.09, saturation: 0.90, brightness: 0.98, alpha: 1)
+        case .questionAsked:  return NSColor(hue: 0.80, saturation: 0.60, brightness: 0.90, alpha: 1)
+        case .idle:           return NSColor(hue: 0.58, saturation: 0.45, brightness: 0.80, alpha: 1)
+        case .finished:       return NSColor(white: 0.55, alpha: 1)
+        }
     }
 }
