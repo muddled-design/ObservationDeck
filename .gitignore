@@ -2,6 +2,7 @@
 *.xcworkspace/
 SupportFiles/
 DerivedData/
+build/
 .build/
 .DS_Store
 dist/
