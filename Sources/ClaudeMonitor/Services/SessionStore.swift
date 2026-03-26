@@ -4,6 +4,14 @@ import Foundation
 final class SessionStore {
     var sessions: [ClaudeSession] = []
     var lastRefreshed: Date?
+    var onRefresh: (() -> Void)?
+
+    /// The most urgent status across all active sessions, for the menu bar icon.
+    var worstStatus: SessionStatus? {
+        sessions.filter { $0.status != .finished }
+            .map(\.status)
+            .min(by: { $0.menuBarPriority < $1.menuBarPriority })
+    }
 
     private var timer: Timer?
     private var sessionMap: [String: ClaudeSession] = [:]
@@ -177,6 +185,7 @@ final class SessionStore {
             a.startedAt > b.startedAt
         }
         lastRefreshed = Date()
+        onRefresh?()
     }
 
     // MARK: - Status determination
