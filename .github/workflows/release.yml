@@ -1,0 +1,112 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (skip version bump and release creation)'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Install dependencies
+      run: brew install xcodegen yq
+
+    - name: Read and increment version
+      id: version
+      run: |
+        CURRENT_VERSION=$(yq '.targets.ClaudeMonitor.settings.base.CURRENT_PROJECT_VERSION' project.yml)
+        echo "current=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+        NEW_VERSION=$((CURRENT_VERSION + 1))
+        echo "new=$NEW_VERSION" >> $GITHUB_OUTPUT
+        echo "tag=release/$NEW_VERSION" >> $GITHUB_OUTPUT
+        echo "Current version: $CURRENT_VERSION"
+        echo "New version: $NEW_VERSION"
+
+    - name: Update version in project.yml
+      if: ${{ !inputs.dry_run }}
+      run: |
+        yq -i '.targets.ClaudeMonitor.settings.base.CURRENT_PROJECT_VERSION = ${{ steps.version.outputs.new }}' project.yml
+        git diff project.yml
+
+    - name: Create temporary keychain
+      run: |
+        security create-keychain -p "${{ secrets.KEYCHAIN_PASSWORD }}" build.keychain
+        security default-keychain -s build.keychain
+        security unlock-keychain -p "${{ secrets.KEYCHAIN_PASSWORD }}" build.keychain
+        security set-keychain-settings -lut 21600 build.keychain
+
+    - name: Import code signing certificate
+      run: |
+        echo "${{ secrets.DEVELOPER_ID_APPLICATION_CERT_BASE64 }}" | base64 --decode > cert.p12
+        security import cert.p12 -k build.keychain -P "${{ secrets.DEVELOPER_ID_APPLICATION_CERT_PASSWORD }}" -T /usr/bin/codesign
+        security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "${{ secrets.KEYCHAIN_PASSWORD }}" build.keychain
+        rm cert.p12
+
+    - name: Verify code signing identity
+      run: security find-identity -v -p codesigning build.keychain
+
+    - name: Generate Xcode project
+      run: make project
+
+    - name: Build archive
+      run: make archive TEAM_ID=${{ secrets.TEAM_ID }}
+
+    - name: Export app bundle
+      run: make export TEAM_ID=${{ secrets.TEAM_ID }}
+
+    - name: Verify app bundle exists
+      run: test -d build/export/ClaudeMonitor.app
+
+    - name: Notarize
+      run: |
+        make notarize \
+          TEAM_ID=${{ secrets.TEAM_ID }} \
+          APPLE_ID=${{ secrets.NOTARIZATION_APPLE_ID }} \
+          NOTARIZE_PASSWORD=${{ secrets.NOTARIZATION_PASSWORD }}
+
+    - name: Create DMG
+      run: make dmg
+
+    - name: Commit and push version bump
+      if: ${{ !inputs.dry_run }}
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add project.yml
+        git commit -m "chore: bump version to ${{ steps.version.outputs.new }}"
+        git push
+
+    - name: Create and push tag
+      if: ${{ !inputs.dry_run }}
+      run: |
+        git tag ${{ steps.version.outputs.tag }}
+        git push origin ${{ steps.version.outputs.tag }}
+
+    - name: Upload DMG artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ClaudeMonitor-${{ steps.version.outputs.new }}
+        path: build/ClaudeMonitor.dmg
+
+    - name: Create GitHub Release
+      if: ${{ !inputs.dry_run }}
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        gh release create ${{ steps.version.outputs.tag }} \
+          --title "Release ${{ steps.version.outputs.new }}" \
+          --generate-notes \
+          build/ClaudeMonitor.dmg
+
+    - name: Cleanup keychain
+      if: always()
+      run: security delete-keychain build.keychain || true
