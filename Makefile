@@ -7,17 +7,18 @@ EXPORT_PATH  := $(BUILD_DIR)/export
 APP_BUNDLE   := $(EXPORT_PATH)/$(APP_NAME).app
 DMG_PATH     := $(BUILD_DIR)/$(APP_NAME).dmg
 
-# Required for export/notarize — pass via env or command line
-TEAM_ID          ?=
-APPLE_ID         ?=
+# Required for archive/export/notarize — pass via env or command line
+TEAM_ID           ?=
+APPLE_ID          ?=
 NOTARIZE_PASSWORD ?=
 
-.PHONY: project archive export notarize dmg clean
+.PHONY: project archive export notarize dmg release clean
 
 project:
 	xcodegen generate
 
-archive: project
+archive:
+	$(if $(TEAM_ID),,$(error TEAM_ID is required))
 	xcodebuild archive \
 		-scheme $(SCHEME) \
 		-configuration Release \
@@ -26,15 +27,15 @@ archive: project
 		CODE_SIGN_IDENTITY="Developer ID Application" \
 		DEVELOPMENT_TEAM=$(TEAM_ID)
 
-export: archive
-	$(if $(TEAM_ID),,$(error TEAM_ID is required — set it via env or make export TEAM_ID=...))
+export:
+	$(if $(TEAM_ID),,$(error TEAM_ID is required))
 	plutil -replace teamID -string "$(TEAM_ID)" ExportOptions.plist -o $(BUILD_DIR)/ExportOptions.plist
 	xcodebuild -exportArchive \
 		-archivePath $(ARCHIVE_PATH) \
 		-exportPath $(EXPORT_PATH) \
 		-exportOptionsPlist $(BUILD_DIR)/ExportOptions.plist
 
-notarize: export
+notarize:
 	$(if $(APPLE_ID),,$(error APPLE_ID is required))
 	$(if $(NOTARIZE_PASSWORD),,$(error NOTARIZE_PASSWORD is required))
 	$(if $(TEAM_ID),,$(error TEAM_ID is required))
@@ -47,7 +48,7 @@ notarize: export
 	xcrun stapler staple $(APP_BUNDLE)
 	xcrun stapler validate $(APP_BUNDLE)
 
-dmg: notarize
+dmg:
 	mkdir -p $(BUILD_DIR)/dmg-staging
 	cp -R $(APP_BUNDLE) $(BUILD_DIR)/dmg-staging/
 	ln -sf /Applications $(BUILD_DIR)/dmg-staging/Applications
@@ -55,10 +56,12 @@ dmg: notarize
 		-srcfolder $(BUILD_DIR)/dmg-staging \
 		-ov -format UDZO \
 		$(DMG_PATH)
-	rm -rf $(BUILD_DIR)/dmg-staging
+	rm -r $(BUILD_DIR)/dmg-staging
 	@echo ""
 	@echo "DMG: $(DMG_PATH)"
 	@echo "SHA256: $$(shasum -a 256 $(DMG_PATH) | cut -d' ' -f1)"
 
+release: project archive export notarize dmg
+
 clean:
-	rm -rf $(BUILD_DIR) $(PROJECT) SupportFiles
+	rm -r $(BUILD_DIR) $(PROJECT) SupportFiles
