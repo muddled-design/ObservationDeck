@@ -82,11 +82,14 @@ See [STATUS_TRANSITIONS.md](STATUS_TRANSITIONS.md) for detailed test cases.
 ```bash
 git clone https://github.com/muddled-design/ObservationDeck.git
 cd ObservationDeck
-xcodegen generate
-xcodebuild -project ObservationDeck.xcodeproj -scheme ClaudeMonitor -configuration Release build
+make project   # generate Xcode project
+make archive   # build release archive (requires TEAM_ID)
+make export    # export signed app (requires TEAM_ID)
+make notarize  # notarize with Apple (requires TEAM_ID, APPLE_ID, NOTARIZE_PASSWORD)
+make dmg       # package into DMG
 ```
 
-Or open `ObservationDeck.xcodeproj` in Xcode after running `xcodegen generate`.
+Or run `make project` and open `ObservationDeck.xcodeproj` in Xcode.
 
 ### 2. Configure Claude Code hooks
 
@@ -178,11 +181,7 @@ chmod +x ~/.claude/monitor-hook.sh
 
 ### 4. Run
 
-Open the built app from the Xcode build products, or build a DMG for distribution:
-
-```bash
-./scripts/build-dmg.sh
-```
+Open the exported app from `build/export/ClaudeMonitor.app`, or run `make dmg` to create a DMG for distribution.
 
 The app will appear as a floating window on top of all other windows. It works across all desktops/spaces.
 
