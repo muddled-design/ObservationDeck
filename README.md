@@ -71,7 +71,8 @@ See [STATUS_TRANSITIONS.md](STATUS_TRANSITIONS.md) for detailed test cases.
 ## Requirements
 
 - macOS 14 (Sonoma) or later
-- Swift 5.9+
+- Xcode 15+
+- [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`)
 - One or more Claude Code sessions running
 
 ## Installation
@@ -81,10 +82,14 @@ See [STATUS_TRANSITIONS.md](STATUS_TRANSITIONS.md) for detailed test cases.
 ```bash
 git clone https://github.com/muddled-design/ObservationDeck.git
 cd ObservationDeck
-swift build -c release
+make project   # generate Xcode project
+make archive   # build release archive (requires TEAM_ID)
+make export    # export signed app (requires TEAM_ID)
+make notarize  # notarize with Apple (requires TEAM_ID, APPLE_ID, NOTARIZE_PASSWORD)
+make dmg       # package into DMG
 ```
 
-The binary will be at `.build/release/ClaudeMonitor`.
+Or run `make project` and open `ObservationDeck.xcodeproj` in Xcode.
 
 ### 2. Configure Claude Code hooks
 
@@ -176,9 +181,7 @@ chmod +x ~/.claude/monitor-hook.sh
 
 ### 4. Run
 
-```bash
-.build/release/ClaudeMonitor
-```
+Open the exported app from `build/export/ClaudeMonitor.app`, or run `make dmg` to create a DMG for distribution.
 
 The app will appear as a floating window on top of all other windows. It works across all desktops/spaces.
 
