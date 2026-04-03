@@ -64,4 +64,4 @@ dmg:
 release: project archive export notarize dmg
 
 clean:
-	rm -r $(BUILD_DIR) $(PROJECT) SupportFiles
+	rm -rf $(BUILD_DIR) $(PROJECT) SupportFiles
