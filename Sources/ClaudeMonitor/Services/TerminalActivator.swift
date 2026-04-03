@@ -24,8 +24,18 @@ func activateTerminal(for pid: Int32) {
         end tell
         """
         var error: NSDictionary?
+        var scriptSucceeded = false
         if let appleScript = NSAppleScript(source: script) {
             appleScript.executeAndReturnError(&error)
+            scriptSucceeded = (error == nil)
+        }
+        // Fall back to plain activate if AppleScript failed (e.g. Automation permission denied)
+        if !scriptSucceeded {
+            if let app = NSWorkspace.shared.runningApplications.first(where: {
+                $0.processIdentifier == appPid
+            }) {
+                app.activate()
+            }
         }
     } else {
         if let app = NSWorkspace.shared.runningApplications.first(where: {

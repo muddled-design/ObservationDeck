@@ -92,6 +92,8 @@ cat > "$CONTENTS/Info.plist" << PLIST
     <true/>
     <key>NSSupportsSuddenTermination</key>
     <false/>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>ClaudeMonitor needs to control Terminal to switch to the tab running your Claude session.</string>
 </dict>
 </plist>
 PLIST
