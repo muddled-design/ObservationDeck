@@ -190,46 +190,4 @@ struct SessionDisclosureRow: View {
         )
     }
 
-    private func activateTerminal(for pid: Int32) {
-        guard let appPid = ProcessMonitor.terminalAppPID(for: pid) else { return }
-        let exePath = ProcessMonitor.executablePath(for: appPid)
-        let isTerminalApp = exePath.contains("Terminal.app")
-        let tty = ProcessMonitor.ttyName(for: pid)
-
-        if isTerminalApp, let tty = tty {
-            // Use AppleScript to switch to the exact tab/window in Terminal.app.
-            // We first find the matching window, select its tab, bring it to front,
-            // THEN activate Terminal — this order is more reliable for window focus.
-            let script = """
-            tell application "Terminal"
-                repeat with w in windows
-                    repeat with i from 1 to count of tabs of w
-                        if tty of tab i of w contains "\(tty)" then
-                            set selected tab of w to tab i of w
-                            -- Bring this window to front by setting index
-                            set index of w to 1
-                            -- Activate after window is selected for reliable focus
-                            activate
-                            return "ok"
-                        end if
-                    end repeat
-                end repeat
-                -- Fallback: just activate Terminal if no TTY match
-                activate
-            end tell
-            """
-            var error: NSDictionary?
-            if let appleScript = NSAppleScript(source: script) {
-                appleScript.executeAndReturnError(&error)
-            }
-        } else {
-            // Generic activation for iTerm, Warp, etc.
-            if let app = NSWorkspace.shared.runningApplications.first(where: {
-                $0.processIdentifier == appPid
-            }) {
-                app.activate()
-            }
-        }
-
-    }
 }

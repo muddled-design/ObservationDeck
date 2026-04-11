@@ -12,12 +12,14 @@ struct ClaudeMonitorApp: App {
     }
 }
 
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
+    private var popoverHostingController: NSViewController?  // kept alive to prevent animation crash
     private var store: SessionStore!
     private var hookInstaller: HookInstaller!
     private var detachedWindow: NSWindow?
+    private var stripWindow: NSWindow?
     private var eventMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -41,14 +43,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         popover = NSPopover()
         popover.contentSize = NSSize(width: 420, height: 500)
         popover.behavior = .transient
-        popover.animates = true
+        popover.animates = false
 
         let contentView = MenuBarContentView(
             store: store,
             hookInstaller: hookInstaller,
             onDetach: { [weak self] in self?.detachToWindow() }
         )
-        popover.contentViewController = NSHostingController(rootView: contentView)
+        let hc = NSHostingController(rootView: contentView)
+        popoverHostingController = hc   // retain strongly — prevents animation use-after-free
+        popover.contentViewController = hc
 
         // Update icon color on each refresh
         store.onRefresh = { [weak self] in
@@ -57,6 +61,45 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self.updateStatusIcon(for: self.store.worstStatus)
             }
         }
+
+        setupStripWindow()
+    }
+
+    // MARK: - Status Strip
+
+    private func setupStripWindow() {
+        let screen = NSScreen.main ?? NSScreen.screens[0]
+
+        let stripHeight: CGFloat = 8
+        let frame = NSRect(
+            x: screen.frame.minX,
+            y: screen.frame.minY,
+            width: screen.frame.width,
+            height: stripHeight
+        )
+
+        let window = NSWindow(
+            contentRect: frame,
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        window.level = NSWindow.Level(rawValue: 1001)
+        window.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.hasShadow = false
+
+        let view = StatusStripView(store: store) { [weak self] in
+            self?.showDetailWindow()
+        }
+        window.contentView = NSHostingView(rootView: view)
+        window.orderFrontRegardless()
+        stripWindow = window
+    }
+
+    func showDetailWindow() {
+        detachToWindow()
     }
 
     // MARK: - Status Icon
@@ -110,39 +153,39 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Popover
 
     @objc private func togglePopover() {
-        // If detached window is visible, collapse it back to menu bar
+        // If detached window is visible, hide it back to menu bar
         if let window = detachedWindow, window.isVisible {
             collapseToMenuBar()
             return
         }
 
-        guard let button = statusItem.button else { return }
-        if popover.isShown {
-            popover.performClose(nil)
-        } else {
-            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-            popover.contentViewController?.view.window?.makeKey()
-        }
+        // Only open — .transient behavior closes the popover when clicking outside
+        guard let button = statusItem.button, !popover.isShown else { return }
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        popover.contentViewController?.view.window?.makeKey()
     }
 
     func collapseToMenuBar() {
-        detachedWindow?.close()
-        detachedWindow = nil
-        NSApp.setActivationPolicy(.accessory)
+        detachedWindow?.orderOut(nil)
+    }
+
+    // NSWindowDelegate: intercept the red-X so it hides rather than closes (avoids animation crash)
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        sender.orderOut(nil)
+        return false
     }
 
     // MARK: - Detach to Floating Window
 
     private func detachToWindow() {
-        popover.performClose(nil)
-
-        if let existing = detachedWindow, existing.isVisible {
+        // If already created, just show it
+        if let existing = detachedWindow {
             existing.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
             return
         }
 
         let contentView = SessionListView(store: store, hookInstaller: hookInstaller)
-
         let hostingController = NSHostingController(rootView: contentView)
 
         let window = NSWindow(
@@ -158,22 +201,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.level = .normal
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.isMovableByWindowBackground = false
+        window.delegate = self   // intercept windowShouldClose
 
         window.makeKeyAndOrderFront(nil)
-        NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
 
-        detachedWindow = window
-
-        // Clean up when window closes
-        NotificationCenter.default.addObserver(
-            forName: NSWindow.willCloseNotification,
-            object: window,
-            queue: .main
-        ) { [weak self] _ in
-            self?.detachedWindow = nil
-            NSApp.setActivationPolicy(.accessory)
-        }
+        detachedWindow = window   // kept for lifetime of app — never closed, only hidden
     }
 }
 

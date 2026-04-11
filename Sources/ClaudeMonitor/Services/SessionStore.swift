@@ -148,6 +148,7 @@ final class SessionStore {
                 if hookSignal != nil {
                     session.status = hookBasedStatus(
                         session: session,
+                        pid: file.pid,
                         lastActivity: lastActivity
                     )
                 } else if HookInstaller.hooksAreConfigured {
@@ -190,12 +191,16 @@ final class SessionStore {
 
     // MARK: - Status determination
 
+    /// How long a "running" hook signal can be stale before we fall back to CPU check.
+    private static let runningHookStaleThreshold: TimeInterval = 30
+
     /// Hook-based status. Key rules:
     /// - "running" from hook is STICKY — stays Running until Stop/Notification hook
     /// - "idle"/"needs_input" from hook wins UNLESS file activity happened well after
     ///   the hook (past the grace period), indicating new work started
     private func hookBasedStatus(
         session: ClaudeSession,
+        pid: Int32,
         lastActivity: Date?
     ) -> SessionStatus {
         let hookStatus = session.hookSignalStatus ?? "running"
@@ -230,7 +235,21 @@ final class SessionStore {
 
         default:
             // TC2, TC3, TC4, TC8, TC9: hook says "running" → STICKY Running.
-            // No timeout, no heuristic override. Only Stop/Notification ends this.
+            // Exception: if the hook signal is stale AND the process has had no CPU
+            // activity, it's likely blocked waiting for input (e.g. asked a question
+            // mid-turn without firing a Stop/Notification hook). Treat as idle.
+            let hookIsStale = Date().timeIntervalSince(hookTS) > Self.runningHookStaleThreshold
+            if hookIsStale, let lastCPU = session.lastCPUTime {
+                let currentCPU = ProcessMonitor.totalCPUTime(pid: pid)
+                session.lastCPUTime = currentCPU
+                let cpuDelta = currentCPU &- lastCPU
+                if cpuDelta <= 10_000_000 {
+                    return .idle
+                }
+            } else {
+                let currentCPU = ProcessMonitor.totalCPUTime(pid: pid)
+                session.lastCPUTime = currentCPU
+            }
             return .running
         }
     }
