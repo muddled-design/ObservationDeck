@@ -5,55 +5,44 @@ class ClaudeMonitor < Formula
   sha256 "399582b319c1f179a303f93564d4a5514051b67d44086e3c3148918706e3798c"
   license "MIT"
 
+  depends_on "xcodegen" => :build
   depends_on xcode: ["15.0", :build]
   depends_on macos: :sonoma
 
   def install
-    # Build the release binary
-    system "swift", "build",
-           "-c", "release",
-           "--disable-sandbox"
+    system "xcodegen", "generate"
+    system "xcodebuild",
+           "-project", "ObservationDeck.xcodeproj",
+           "-scheme", "ClaudeMonitor",
+           "-configuration", "Release",
+           "CODE_SIGN_IDENTITY=",
+           "CODE_SIGNING_REQUIRED=NO",
+           "CODE_SIGNING_ALLOWED=NO",
+           "CONFIGURATION_BUILD_DIR=#{buildpath}/build"
 
-    bin_path = buildpath/".build/release/ClaudeMonitor"
+    prefix.install "build/ClaudeMonitor.app"
 
-    # Create the .app bundle
-    app_bundle = prefix/"ClaudeMonitor.app/Contents"
-    (app_bundle/"MacOS").mkpath
-    (app_bundle/"Resources").mkpath
-
-    cp bin_path, app_bundle/"MacOS/ClaudeMonitor"
-    chmod 0755, app_bundle/"MacOS/ClaudeMonitor"
-
-    # Write Info.plist
-    (app_bundle/"Info.plist").write info_plist
-
-    # Install the hook script to share for the install-hooks script to find
     (share/"claude-monitor").mkpath
     cp "monitor-hook.sh", share/"claude-monitor/monitor-hook.sh"
     chmod 0755, share/"claude-monitor/monitor-hook.sh"
 
-    # Install the hook installer script
     cp "scripts/install-hooks.sh", share/"claude-monitor/install-hooks.sh"
     chmod 0755, share/"claude-monitor/install-hooks.sh"
   end
 
   def post_install
-    # Install hooks into Claude Code settings
     hook_src = share/"claude-monitor/monitor-hook.sh"
     hook_dest = Pathname.new(Dir.home)/".claude/monitor-hook.sh"
     status_dir = Pathname.new(Dir.home)/".claude/monitor-status"
     settings_file = Pathname.new(Dir.home)/".claude/settings.json"
 
-    # Create directories
     hook_dest.dirname.mkpath
     status_dir.mkpath
 
-    # Copy hook script
     cp hook_src, hook_dest
     chmod 0755, hook_dest
     ohai "Installed hook script to #{hook_dest}"
 
-    # Register hooks in settings.json
     register_hooks(settings_file)
 
     ohai "Hooks installed! They will activate on your next Claude Code session."
@@ -101,7 +90,6 @@ class ClaudeMonitor < Formula
     events.each do |event|
       rules = hooks[event] || []
 
-      # Check if already present
       found = rules.any? do |rule|
         (rule["hooks"] || []).any? { |h| h["command"] == hook_command }
       end
@@ -125,38 +113,5 @@ class ClaudeMonitor < Formula
     else
       ohai "Hooks already registered in #{settings_file}"
     end
-  end
-
-  def info_plist
-    <<~XML
-      <?xml version="1.0" encoding="UTF-8"?>
-      <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-      <plist version="1.0">
-      <dict>
-          <key>CFBundleExecutable</key>
-          <string>ClaudeMonitor</string>
-          <key>CFBundleIdentifier</key>
-          <string>com.begger.claudemonitor</string>
-          <key>CFBundleName</key>
-          <string>Observation Deck</string>
-          <key>CFBundleDisplayName</key>
-          <string>Observation Deck</string>
-          <key>CFBundleVersion</key>
-          <string>#{version}</string>
-          <key>CFBundleShortVersionString</key>
-          <string>#{version}</string>
-          <key>CFBundlePackageType</key>
-          <string>APPL</string>
-          <key>CFBundleInfoDictionaryVersion</key>
-          <string>6.0</string>
-          <key>LSMinimumSystemVersion</key>
-          <string>14.0</string>
-          <key>NSHighResolutionCapable</key>
-          <true/>
-          <key>LSUIElement</key>
-          <false/>
-      </dict>
-      </plist>
-    XML
   end
 end
