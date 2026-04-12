@@ -1,0 +1,85 @@
+name: ObservationDeck
+options:
+  bundleIdPrefix: com.begger
+  deploymentTarget:
+    macOS: "14.0"
+  xcodeVersion: "15.0"
+
+configs:
+  Debug: debug
+  Release: release
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+  configs:
+    Debug:
+      CODE_SIGN_IDENTITY: "-"
+      CODE_SIGN_IDENTITY[sdk=macosx*]: "-"
+    Release:
+      CODE_SIGN_STYLE: Manual
+      CODE_SIGN_IDENTITY: Apple Development
+      CODE_SIGN_IDENTITY[sdk=macosx*]: Developer ID Application
+
+targets:
+  CLibProc:
+    type: library.static
+    platform: macOS
+    sources:
+      - path: Sources/CLibProc
+        excludes:
+          - "include/module.modulemap"
+    settings:
+      base:
+        HEADER_SEARCH_PATHS:
+          - "$(SRCROOT)/Sources/CLibProc/include"
+        MODULEMAP_FILE: "$(SRCROOT)/Sources/CLibProc/include/module.modulemap"
+        CLANG_ENABLE_MODULES: YES
+        DEFINES_MODULE: YES
+
+  ClaudeMonitor:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/ClaudeMonitor
+    dependencies:
+      - target: CLibProc
+    info:
+      path: SupportFiles/Info.plist
+      properties:
+        CFBundleExecutable: ClaudeMonitor
+        CFBundleIdentifier: com.begger.claudemonitor
+        CFBundleName: Observation Deck
+        CFBundleDisplayName: Observation Deck
+        CFBundlePackageType: APPL
+        CFBundleInfoDictionaryVersion: "6.0"
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        LSMinimumSystemVersion: "14.0"
+        NSHighResolutionCapable: true
+        LSUIElement: true
+        NSSupportsAutomaticTermination: true
+        NSSupportsSuddenTermination: false
+        NSAppleEventsUsageDescription: ClaudeMonitor needs to control Terminal to switch to the tab running your Claude session.
+    settings:
+      base:
+        PRODUCT_NAME: ClaudeMonitor
+        PRODUCT_BUNDLE_IDENTIFIER: com.begger.claudemonitor
+        MARKETING_VERSION: "1.1.0"
+        CURRENT_PROJECT_VERSION: "2"
+        CODE_SIGN_ENTITLEMENTS: ClaudeMonitor.entitlements
+        HEADER_SEARCH_PATHS:
+          - "$(SRCROOT)/Sources/CLibProc/include"
+        SWIFT_INCLUDE_PATHS:
+          - "$(SRCROOT)/Sources/CLibProc/include"
+
+schemes:
+  ClaudeMonitor:
+    build:
+      targets:
+        ClaudeMonitor: all
+    run:
+      config: Debug
+    archive:
+      config: Release
