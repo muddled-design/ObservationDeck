@@ -1,4 +1,4 @@
-class ClaudeMonitor < Formula
+class ObservationDeck < Formula
   desc "Floating macOS dashboard that monitors all active Claude Code sessions"
   homepage "https://github.com/muddled-design/ObservationDeck"
   url "https://github.com/muddled-design/ObservationDeck/archive/refs/tags/v1.1.0.tar.gz"
@@ -22,16 +22,16 @@ class ClaudeMonitor < Formula
 
     prefix.install "build/ClaudeMonitor.app"
 
-    (share/"claude-monitor").mkpath
-    cp "monitor-hook.sh", share/"claude-monitor/monitor-hook.sh"
-    chmod 0755, share/"claude-monitor/monitor-hook.sh"
+    (share/"observation-deck").mkpath
+    cp "monitor-hook.sh", share/"observation-deck/monitor-hook.sh"
+    chmod 0755, share/"observation-deck/monitor-hook.sh"
 
-    cp "scripts/install-hooks.sh", share/"claude-monitor/install-hooks.sh"
-    chmod 0755, share/"claude-monitor/install-hooks.sh"
+    cp "scripts/install-hooks.sh", share/"observation-deck/install-hooks.sh"
+    chmod 0755, share/"observation-deck/install-hooks.sh"
   end
 
   def post_install
-    hook_src = share/"claude-monitor/monitor-hook.sh"
+    hook_src = share/"observation-deck/monitor-hook.sh"
     hook_dest = Pathname.new(Dir.home)/".claude/monitor-hook.sh"
     status_dir = Pathname.new(Dir.home)/".claude/monitor-status"
     settings_file = Pathname.new(Dir.home)/".claude/settings.json"
@@ -60,14 +60,14 @@ class ClaudeMonitor < Formula
       Or add it to Login Items for auto-start.
 
       Claude Code hooks have been installed automatically.
-      To remove hooks:  #{share}/claude-monitor/install-hooks.sh --uninstall
-      To reinstall hooks: #{share}/claude-monitor/install-hooks.sh
+      To remove hooks:  #{share}/observation-deck/install-hooks.sh --uninstall
+      To reinstall hooks: #{share}/observation-deck/install-hooks.sh
     EOS
   end
 
   test do
     assert_predicate prefix/"ClaudeMonitor.app/Contents/MacOS/ClaudeMonitor", :executable?
-    assert_predicate share/"claude-monitor/monitor-hook.sh", :exist?
+    assert_predicate share/"observation-deck/monitor-hook.sh", :exist?
   end
 
   private
